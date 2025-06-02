@@ -1,49 +1,48 @@
 import os
+import threading
+from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
-from telegram.error import Forbidden
-from flask import Flask  # Added for Render compatibility
-import threading
 
-# Flask app for Render's port requirement
+# Initialize Flask app for Render's port requirement
 app = Flask(__name__)
 
 @app.route('/')
-def home():
-    return "Telegram bot is running!"
+def health_check():
+    return "Telegram Bot is Running", 200
 
-# Your existing bot code
+# Bot Configuration
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHANNEL_ID = "@Btec2025"
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    try:
-        await update.message.reply_text("សូមបញ្ចេញមតិយោបល់ ឬមានសំណូមពរដោយប្រកាន់ភ្ជាប់ក្រមសីលធម៌!")
-    except Forbidden:
-        print("Bot was blocked by the user")
-
-# [Keep all your existing handler functions unchanged...]
+# [Keep all your existing handler functions...]
 
 def run_bot():
     if not TOKEN:
-        print("❌ Error: Bot token is missing! Set TELEGRAM_BOT_TOKEN environment variable.")
-        return
+        raise RuntimeError("TELEGRAM_BOT_TOKEN environment variable not set")
     
-    app_bot = ApplicationBuilder().token(TOKEN).build()
-
-    app_bot.add_handler(CommandHandler("start", start))
-    app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app_bot.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app_bot.add_handler(MessageHandler(filters.VIDEO, handle_video))
-    app_bot.add_handler(MessageHandler(filters.ATTACHMENT, handle_document))
-
-    print("✅ Bot is running...")
-    app_bot.run_polling()
+    application = ApplicationBuilder().token(TOKEN).build()
+    
+    # Register handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    application.add_handler(MessageHandler(filters.VIDEO, handle_video))
+    application.add_handler(MessageHandler(filters.ATTACHMENT, handle_document))
+    
+    print("🟢 Bot is now polling...")
+    application.run_polling()
 
 if __name__ == "__main__":
-    # Start bot in a separate thread
-    bot_thread = threading.Thread(target=run_bot)
+    # Start bot in a daemon thread
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
     bot_thread.start()
     
-    # Start Flask server (required for Render)
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
+    # Start Flask server using Gunicorn if available
+    port = int(os.environ.get("PORT", 10000))
+    if 'gunicorn' not in os.environ.get('SERVER_SOFTWARE', ''):
+        # Development server
+        app.run(host='0.0.0.0', port=port)
+    else:
+        # Production (Gunicorn will handle it)
+        pass
