@@ -3,8 +3,9 @@ import threading
 from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.error import Forbidden
 
-# Initialize Flask app for Render's port requirement
+# Initialize Flask app
 app = Flask(__name__)
 
 @app.route('/')
@@ -15,7 +16,23 @@ def health_check():
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHANNEL_ID = "@Btec2025"
 
-# [Keep all your existing handler functions...]
+# Handler functions must be defined before run_bot()
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        await update.message.reply_text("សូមបញ្ចេញមតិយោបល់ ឬមានសំណូមពរដោយប្រកាន់ភ្ជាប់ក្រមសីលធម៌!")
+    except Forbidden:
+        print("Bot was blocked by the user")
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    text = update.message.text
+    if text:
+        try:
+            await context.bot.send_message(chat_id=CHANNEL_ID, text=f"📩 សំបុត្រ:\n{text}")
+        except Exception as e:
+            await update.message.reply_text("❌ Failed to send the message. Please try again.")
+            print(f"Error sending message: {e}")
+
+# [Keep all your other handler functions here...]
 
 def run_bot():
     if not TOKEN:
@@ -38,11 +55,6 @@ if __name__ == "__main__":
     bot_thread = threading.Thread(target=run_bot, daemon=True)
     bot_thread.start()
     
-    # Start Flask server using Gunicorn if available
+    # Start Flask server
     port = int(os.environ.get("PORT", 10000))
-    if 'gunicorn' not in os.environ.get('SERVER_SOFTWARE', ''):
-        # Development server
-        app.run(host='0.0.0.0', port=port)
-    else:
-        # Production (Gunicorn will handle it)
-        pass
+    app.run(host='0.0.0.0', port=port)
