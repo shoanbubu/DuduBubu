@@ -2,12 +2,19 @@ import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from telegram.error import Forbidden
+from flask import Flask  # Added for Render compatibility
+import threading
 
-# ✅ Correct token assignment (Use environment variable OR direct assignment)
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # Preferred: Set this in your environment variables
-# TOKEN = "YOUR_BOT_TOKEN"  # Hardcoded (Use only for testing)
+# Flask app for Render's port requirement
+app = Flask(__name__)
 
-CHANNEL_ID = "@Btec2025"  # Updated group/channel name
+@app.route('/')
+def home():
+    return "Telegram bot is running!"
+
+# Your existing bot code
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHANNEL_ID = "@Btec2025"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
@@ -15,57 +22,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Forbidden:
         print("Bot was blocked by the user")
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = update.message.text
-    if text:
-        try:
-            await context.bot.send_message(chat_id=CHANNEL_ID, text=f"📩 សំបុត្រ:\n{text}")
-        except Exception as e:
-            await update.message.reply_text("❌ Failed to send the message. Please try again.")
-            print(f"Error sending message: {e}")
+# [Keep all your existing handler functions unchanged...]
 
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    try:
-        photo = update.message.photo[-1].file_id
-        caption = update.message.caption if update.message.caption else "Anonymous Photo"
-        await context.bot.send_photo(chat_id=CHANNEL_ID, photo=photo, caption=caption)
-    except Exception as e:
-        await update.message.reply_text("❌ Failed to send the photo. Please try again.")
-        print(f"Error sending photo: {e}")
-
-async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    try:
-        video = update.message.video.file_id
-        caption = update.message.caption if update.message.caption else "Anonymous Video"
-        await context.bot.send_video(chat_id=CHANNEL_ID, video=video, caption=caption)
-    except Exception as e:
-        await update.message.reply_text("❌ Failed to send the video. Please try again.")
-        print(f"Error sending video: {e}")
-
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    try:
-        document = update.message.document.file_id
-        caption = update.message.caption if update.message.caption else "Anonymous Document"
-        await context.bot.send_document(chat_id=CHANNEL_ID, document=document, caption=caption)
-    except Exception as e:
-        await update.message.reply_text("❌ Failed to send the document. Please try again.")
-        print(f"Error sending document: {e}")
-
-def main() -> None:
+def run_bot():
     if not TOKEN:
         print("❌ Error: Bot token is missing! Set TELEGRAM_BOT_TOKEN environment variable.")
         return
     
-    app = ApplicationBuilder().token(TOKEN).build()
+    app_bot = ApplicationBuilder().token(TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.add_handler(MessageHandler(filters.VIDEO, handle_video))
-    app.add_handler(MessageHandler(filters.ATTACHMENT, handle_document))
+    app_bot.add_handler(CommandHandler("start", start))
+    app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app_bot.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app_bot.add_handler(MessageHandler(filters.VIDEO, handle_video))
+    app_bot.add_handler(MessageHandler(filters.ATTACHMENT, handle_document))
 
     print("✅ Bot is running...")
-    app.run_polling()
+    app_bot.run_polling()
 
 if __name__ == "__main__":
-    main()
+    # Start bot in a separate thread
+    bot_thread = threading.Thread(target=run_bot)
+    bot_thread.start()
+    
+    # Start Flask server (required for Render)
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
